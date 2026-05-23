@@ -24,11 +24,11 @@ st.markdown("""
 
 /* main background */
 .main {
-    background-color: #141414;
+    background: linear-gradient(to bottom, #000000, #141414, #1f1f1f);
     color: white;
 }
 
-/* remove default padding */
+/* remove top spacing */
 .block-container {
     padding-top: 1rem;
 }
@@ -44,9 +44,10 @@ st.markdown("""
 
 /* movie card */
 .movie-card {
-    background-color: #1f1f1f;
-    padding: 10px;
-    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    padding: 12px;
+    border-radius: 15px;
     text-align: center;
     transition: 0.3s;
     margin-bottom: 20px;
@@ -122,51 +123,110 @@ movies = pd.DataFrame(movies_dic)
 # FETCH MOVIE POSTER
 # =========================
 
+@st.cache_data(show_spinner=False)
 def fetch_poster(movie_id):
 
-    url = f'https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US'
+    try:
 
-    response = requests.get(url)
+        url = f'https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US'
 
-    data = response.json()
+        response = requests.get(url)
 
-    # if poster exists
-    if data.get('poster_path'):
+        data = response.json()
 
-        poster_path = data['poster_path']
+        # if poster exists
+        if data.get('poster_path'):
 
-        full_path = "https://image.tmdb.org/t/p/w500/" + poster_path
+            poster_path = data['poster_path']
 
-        return full_path
+            full_path = "https://image.tmdb.org/t/p/w500/" + poster_path
 
-    # fallback image
-    else:
-        return "https://via.placeholder.com/500x750?text=No+Image"
+            return full_path
+
+        else:
+            return "https://via.placeholder.com/500x750?text=No+Image"
+
+    except:
+        return "https://via.placeholder.com/500x750?text=Error"
 
 # =========================
 # FETCH MOVIE TRAILER
 # =========================
 
+@st.cache_data(show_spinner=False)
 def fetch_trailer(movie_id):
 
-    url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={API_KEY}"
+    try:
 
-    response = requests.get(url)
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}/videos?api_key={API_KEY}"
 
-    data = response.json()
+        response = requests.get(url)
 
-    # find trailer
-    if data.get('results'):
+        data = response.json()
 
-        for video in data['results']:
+        # find trailer
+        if data.get('results'):
 
-            if video['type'] == 'Trailer':
+            for video in data['results']:
 
-                trailer_url = f"https://www.youtube.com/watch?v={video['key']}"
+                if (
+                    video.get('type') == 'Trailer'
+                    and video.get('site') == 'YouTube'
+                ):
 
-                return trailer_url
+                    trailer_url = f"https://www.youtube.com/watch?v={video['key']}"
 
-    return None
+                    return trailer_url
+
+        return None
+
+    except:
+        return None
+
+# =========================
+# FETCH MOVIE DETAILS
+# =========================
+
+@st.cache_data(show_spinner=False)
+def fetch_movie_details(movie_id):
+
+    try:
+
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key={API_KEY}&language=en-US"
+
+        response = requests.get(url)
+
+        data = response.json()
+
+        genres = []
+
+        if data.get('genres'):
+
+            genres = [g['name'] for g in data['genres']]
+
+        return {
+
+            "rating": data.get('vote_average', 'N/A'),
+
+            "release_date": data.get('release_date', 'N/A'),
+
+            "overview": data.get('overview', 'No overview available'),
+
+            "genres": genres
+        }
+
+    except:
+
+        return {
+
+            "rating": "N/A",
+
+            "release_date": "N/A",
+
+            "overview": "No overview available",
+
+            "genres": []
+        }
 
 # =========================
 # RECOMMENDATION FUNCTION
@@ -178,7 +238,7 @@ def recommend(movie):
 
     if movie_list.empty:
         st.error("Movie not found")
-        return [], [], []
+        return [], [], [], []
 
     movie_index = movie_list.index[0]
 
@@ -193,6 +253,7 @@ def recommend(movie):
     movie_names = []
     movie_posters = []
     movie_trailers = []
+    movie_details = []
 
     for i in recommended_movies:
 
@@ -213,7 +274,12 @@ def recommend(movie):
             fetch_trailer(movie_id)
         )
 
-    return movie_names, movie_posters, movie_trailers
+        # append details
+        movie_details.append(
+            fetch_movie_details(movie_id)
+        )
+
+    return movie_names, movie_posters, movie_trailers, movie_details
 
 # =========================
 # SIDEBAR
@@ -234,6 +300,10 @@ with st.sidebar:
     st.write("✔ Machine Learning")
     st.write("✔ TMDB API")
 
+    st.markdown("---")
+
+    st.write(f"🎬 Total Movies: {len(movies)}")
+
 # =========================
 # HERO SECTION
 # =========================
@@ -243,21 +313,47 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# optional banner image
+# banner image
 st.image(
-    "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba",
+    "https://wallpapercave.com/wp/wp8871710.jpg",
     use_container_width=True
 )
 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # =========================
+# TRENDING MOVIES SECTION
+# =========================
+
+st.subheader("🔥 Trending Movies")
+
+trending_movies = movies.sample(5)
+
+trend_cols = st.columns(5)
+
+for idx, col in enumerate(trend_cols):
+
+    with col:
+
+        movie_id = trending_movies.iloc[idx].movie_id
+
+        st.image(
+            fetch_poster(movie_id)
+        )
+
+        st.caption(
+            trending_movies.iloc[idx].title
+        )
+
+# =========================
 # MOVIE SEARCH
 # =========================
 
 selected_movie_name = st.selectbox(
-    '🔍 Search Movie',
-    sorted(movies['title'].values)
+    '🔍 Search your favorite movie',
+    sorted(movies['title'].values),
+    index=None,
+    placeholder="Type movie name..."
 )
 
 # =========================
@@ -266,51 +362,97 @@ selected_movie_name = st.selectbox(
 
 if st.button('🎥 Recommend Movies'):
 
-    # loading animation
-    with st.spinner("Finding best movies for you..."):
+    if selected_movie_name is not None:
 
-        names, posters, trailers = recommend(selected_movie_name)
+        # loading animation
+        with st.spinner("Finding best movies for you..."):
 
-    # display recommendations
-    if len(names) >= 5:
+            names, posters, trailers, details = recommend(selected_movie_name)
 
-        cols = st.columns(5)
+        # display recommendations
+        if len(names) >= 5:
 
-        for idx in range(5):
+            st.subheader("🎬 Recommended Movies")
 
-            with cols[idx]:
+            cols = st.columns(5)
 
-                # movie card start
-                st.markdown(
-                    "<div class='movie-card'>",
-                    unsafe_allow_html=True
-                )
+            for idx in range(5):
 
-                # movie poster
-                st.image(posters[idx])
+                with cols[idx]:
 
-                # movie name
-                st.markdown(
-                    f"### {names[idx]}"
-                )
-
-                # fake netflix match percentage
-                st.write(f"🔥 {90 - idx}% Match")
-
-                # trailer button
-                if trailers[idx]:
-
-                    st.link_button(
-                        "▶ Watch Trailer",
-                        trailers[idx]
+                    # movie card start
+                    st.markdown(
+                        "<div class='movie-card'>",
+                        unsafe_allow_html=True
                     )
 
-                else:
-                    st.write("Trailer Not Available")
+                    # movie poster
+                    st.image(posters[idx])
 
-                # movie card end
-                st.markdown(
-                    "</div>",
-                    unsafe_allow_html=True
-                )
-            st.image(posters[4])
+                    # movie name
+                    st.markdown(
+                        f"### {names[idx]}"
+                    )
+
+                    # match percentage
+                    st.write(f"🔥 {90 - idx}% Match")
+
+                    # progress bar
+                    st.progress((90 - idx) / 100)
+
+                    # movie rating
+                    st.write(
+                        f"⭐ Rating: {details[idx]['rating']}"
+                    )
+
+                    # genres
+                    st.write(
+                        "🎭 " + ", ".join(details[idx]['genres'][:2])
+                    )
+
+                    # release date
+                    st.write(
+                        f"📅 {details[idx]['release_date']}"
+                    )
+
+                    # trailer button
+                    if trailers[idx]:
+
+                        st.link_button(
+                            "▶ Watch Trailer",
+                            trailers[idx]
+                        )
+
+                    else:
+                        st.write("Trailer Not Available")
+
+                    # movie overview
+                    with st.expander("Movie Overview"):
+
+                        st.write(
+                            details[idx]['overview']
+                        )
+
+                    # movie card end
+                    st.markdown(
+                        "</div>",
+                        unsafe_allow_html=True
+                    )
+
+    else:
+        st.warning("Please select a movie first")
+
+# =========================
+# FOOTER
+# =========================
+
+st.markdown("---")
+
+st.markdown(
+    """
+    <center>
+    Made with ❤️ using Streamlit, TMDB API & Machine Learning
+    </center>
+    """,
+    unsafe_allow_html=True
+)
