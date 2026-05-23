@@ -309,7 +309,7 @@ with st.sidebar:
 # =========================
 
 st.markdown(
-    "<div class='main-title'>🎬 NETFLIX MOVIE RECOMMENDER</div>",
+    "<div class='main-title'>🎬  ReelVerse AI</div>",
     unsafe_allow_html=True
 )
 
